@@ -333,6 +333,7 @@ BPF_CALL_3(bpf_probe_write_user, void __user *, unsafe_ptr, const void *, src,
 	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
+	pteval_t val, mask;
 
 	pgd = pgd_offset(mm, virt_addr);
 	if (!pgd_present(*pgd))
@@ -350,9 +351,9 @@ BPF_CALL_3(bpf_probe_write_user, void __user *, unsafe_ptr, const void *, src,
 	if (!pte_present(*pte))
 		printk(KERN_ERR "Failed to get pte\n");
 
-	pteval_t val = pte_val(*pte);
+	val = pte_val(*pte);
 	printk("pteval = %lx\n", val);
-	pteval_t mask = (_AT(pteval_t, 1) << 56);
+	mask = (_AT(pteval_t, 1) << 56);
 	if (val & mask) {
 		return -EFAULT;
 	}
