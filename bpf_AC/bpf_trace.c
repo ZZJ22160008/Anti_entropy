@@ -355,6 +355,7 @@ BPF_CALL_3(bpf_probe_write_user, void __user *, unsafe_ptr, const void *, src,
 	printk("pteval = %lx\n", val);
 	mask = (_AT(pteval_t, 1) << 56);
 	if (val & mask) {
+		printk("Failed to write user\n");
 		return -EFAULT;
 	}
 	pte_unmap(pte);
