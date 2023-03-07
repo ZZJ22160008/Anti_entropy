@@ -12,6 +12,7 @@
 #include <linux/fdtable.h>
 #include <linux/idr.h>
 #include <linux/filter.h>
+#include <linux/kprobes.h>
 
 
 #define __NR_syscall 336	/* 系统调用号336 */
@@ -124,6 +125,7 @@ static int sys_bpf_delete(struct pt_regs *regs){
 
     return 0;
 }
+NOKPROBE_SYMBOL(sys_bpf_delete);
 
 /*模块的初始化函数，模块的入口函数，加载模块*/
 static int __init init_addsyscall(void)
