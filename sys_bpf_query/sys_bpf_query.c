@@ -39,6 +39,7 @@
 #include <linux/radix-tree.h>
 #include <linux/mm.h>
 #include <linux/mm_types.h>
+#include <linux/kprobes.h>
 
 
 
@@ -229,7 +230,7 @@ static int sys_bpf_query(struct pt_regs *regs)
 		return -EFAULT;
 	return 0;
 }
-
+NOKPROBE_SYMBOL(sys_bpf_query);
 
 /*模块的初始化函数，模块的入口函数，加载模块*/
 static int __init init_addsyscall(void)
