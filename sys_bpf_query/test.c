@@ -153,13 +153,11 @@ static int show_prog(void)
 	__u32 len = sizeof(info);
 	int err;
 
-	printf("info addr = %lx\n", &info);
-
 	while(true){
-		if (err = syscall(335, &info, &id))
-            break;
-        id++;
-		print_prog_plain(&info);
+	    if (err = syscall(335, &info, &id))
+                break;
+            id++;
+	    print_prog_plain(&info);
 	}
 	
 	return 0;
