@@ -182,16 +182,16 @@ static int sys_bpf_query(struct pt_regs *regs)
 
 
 	/* get bpf_prog *prog from prog_idr */
-    int __user *uid = (int __user *)regs->si;
-    u32 id;
-    get_user(id, uid);
+        int __user *uid = (int __user *)regs->si;
+        u32 id;
+        get_user(id, uid);
 
 	struct bpf_prog *prog;
-    if (id >= INT_MAX)
-        return -EINVAL;
+        if (id >= INT_MAX)
+            return -EINVAL;
 	prog = idr_get_next(prog_idr, &id);
-    if (!prog)
-        return -ENOENT;
+        if (!prog)
+            return -ENOENT;
 
 	int __user *uinfo = (int __user *)regs->di;
 	struct bpf_prog_info info;
