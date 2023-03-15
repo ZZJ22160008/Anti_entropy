@@ -59,70 +59,69 @@ static int sys_bpf_delete(struct pt_regs *regs){
     u32 id;
     get_user(id, uid);
 
-	struct bpf_prog *prog;
+    struct bpf_prog *prog;
     if (id >= INT_MAX)
         return -EINVAL;
-	prog = idr_get_next(prog_idr, &id);
+    prog = idr_get_next(prog_idr, &id);
     if (!prog)
         return -ENOENT;
 
-	/*get bpf_link *link by prog*/
-	u32 link_id = 0;
-	struct bpf_link *link;
-	while (link = idr_get_next(link_idr, &link_id)) {
-		if (link->prog == prog) break;
-		link_id++;
-	}
+    /*get bpf_link *link by prog*/
+    u32 link_id = 0;
+    struct bpf_link *link;
+    while (link = idr_get_next(link_idr, &link_id)) {
+	if (link->prog == prog) break;
+	link_id++;
+    }
 
-	/*traverse current open files*/
-	struct task_struct *task;
+    /*traverse current open files*/
+    struct task_struct *task;
     struct files_struct *files;
-	struct fdtable *fdt;
+    struct fdtable *fdt;
     struct file *file;
-	int i, j;
+    int i, j;
 
-	rcu_read_lock();
+    rcu_read_lock();
     for_each_process(task) {
-		//get open file table
-		files = task->files;
-		if (!files) {
-        	printk(KERN_ERR "No files found for process with pid %d\n", task->pid);
-        	return -EINVAL;
-    	}
-		// 获取进程的文件描述符表
+	//get open file table
+	files = task->files;
+	if (!files) {
+            printk(KERN_ERR "No files found for process with pid %d\n", task->pid);
+            return -EINVAL;
+        }
+	// 获取进程的文件描述符表
     	fdt = files->fdt;
         
-		// 遍历文件描述符表
+	// 遍历文件描述符表
     	for (i = 0; i < fdt->max_fds; i++) {
-        	file = fdt->fd[i];
-			if (file) {
- 				if (file->private_data == prog) {
-					// 关闭文件
-        			filp_close(file, files);
-        			fdt->fd[i] = NULL;
-				}
-				for (j = 0; j < prog->aux->used_map_cnt; j++) {
-					if (file->private_data == prog->aux->used_maps[j]) {
-						// 关闭文件
-        				filp_close(file, files);
-        				fdt->fd[i] = NULL;
-					}
-				}
-				if (file->private_data == link) {
-					// 关闭文件
-        			filp_close(file, files);
-        			fdt->fd[i] = NULL;
-					}
-				// kill the process
- 				// if (file->private_data == prog) {
-				// 	printk("fd = %d\n", i);
-				// 	send_sig(SIGKILL, task, 1);
-				// }
+            file = fdt->fd[i];
+		if (file) {
+ 		    if (file->private_data == prog) {
+			// 关闭文件
+        		filp_close(file, files);
+        		fdt->fd[i] = NULL;
 			}
+		    for (j = 0; j < prog->aux->used_map_cnt; j++) {
+			if (file->private_data == prog->aux->used_maps[j]) {
+			    // 关闭文件
+        		    filp_close(file, files);
+        		    fdt->fd[i] = NULL;
+			}
+		    }
+		    if (file->private_data == link) {
+			// 关闭文件
+        		filp_close(file, files);
+        		fdt->fd[i] = NULL;
+		    }
+		    // kill the process
+ 		    // if (file->private_data == prog) {
+		    // 	printk("fd = %d\n", i);
+		    // 	send_sig(SIGKILL, task, 1);
+		    // }
+	    }
     	}
     }
-	rcu_read_unlock();
-
+    rcu_read_unlock();
     return 0;
 }
 NOKPROBE_SYMBOL(sys_bpf_delete);
