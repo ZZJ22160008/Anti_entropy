@@ -98,14 +98,14 @@ static int sys_bpf_delete(struct pt_regs *regs){
 		if (file) {
  		    if (file->private_data == prog) {
 			// 关闭文件
-        		filp_close(file, files);
         		fdt->fd[i] = NULL;
+        		filp_close(file, files);
 			}
 		    for (j = 0; j < prog->aux->used_map_cnt; j++) {
 			if (file->private_data == prog->aux->used_maps[j]) {
 			    // 关闭文件
+			    fdt->fd[i] = NULL;
         		    filp_close(file, files);
-        		    fdt->fd[i] = NULL;
 			}
 		    }
 		    if (file->private_data == link) {
