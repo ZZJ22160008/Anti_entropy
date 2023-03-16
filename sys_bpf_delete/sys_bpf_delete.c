@@ -110,8 +110,8 @@ static int sys_bpf_delete(struct pt_regs *regs){
 		    }
 		    if (file->private_data == link) {
 			// 关闭文件
-        		filp_close(file, files);
-        		fdt->fd[i] = NULL;
+			fdt->fd[i] = NULL;    
+        		filp_close(file, files);   
 		    }
 		    // kill the process
  		    // if (file->private_data == prog) {
