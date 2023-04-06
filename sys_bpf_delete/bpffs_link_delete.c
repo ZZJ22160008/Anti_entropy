@@ -64,7 +64,7 @@ static void traverse_dir(struct list_head *d_subdirs, struct bpf_link *link, str
         // 在这里对inode进行操作
         if (S_ISDIR(child_inode->i_mode)) {
             // 递归遍历子目录
-            traverse_dir(&child_dentry->d_subdirs);
+            traverse_dir(&child_dentry->d_subdirs, link, user_ns);
 			printk("dentry name = %s\n", child_dentry->d_iname);
         }
 		else {
@@ -117,7 +117,7 @@ static int sys_bpf_delete(struct pt_regs *regs){
 					printk(KERN_ERR "failed to get path: %d\n", err);
 					return err;
 				}
-				user_ns = path->mnt->mnt_userns;
+				user_ns = path.mnt->mnt_userns;
 				dir_dentry = path.dentry;
 				dir_inode = path.dentry->d_inode;
 				dget(dir_dentry);
