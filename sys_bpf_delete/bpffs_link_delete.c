@@ -70,8 +70,13 @@ static void traverse_dir(struct list_head *d_subdirs, struct bpf_link *link, str
 		else {
 			if (child_inode->i_private == link) {
 				printk("find the inode!\n");
-				err = vfs_unlink(user_ns, child_inode, child_dentry, NULL);
+				ihold(child_inode);
+				err = vfs_unlink(user_ns, child_dentry->d_parent->d_inode, child_dentry, NULL);
 				printk("err = %d\n", err);
+				dput(child_dentry);
+				if (child_inode)
+					iput(child_inode);
+				child_inode = NULL;
 			}
 		}
     }
