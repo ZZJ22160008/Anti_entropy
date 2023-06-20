@@ -57,6 +57,15 @@ const char * const prog_type_name[] = {
 	[BPF_PROG_TYPE_SK_LOOKUP]		= "sk_lookup",
 };
 
+
+/*define whitelist*/
+
+/*prog_type whitelist*/
+static int prog_type_offset = 4;
+static int prog_type_size = 4;
+static int prog_type_whitelist[] = {8, 15};
+
+
 void fprint_hex(FILE *f, void *arg, unsigned int n, const char *sep)
 {
 	unsigned char *data = arg;
@@ -106,7 +115,7 @@ static void print_boot_time(__u64 nsecs, char *buf, unsigned int size)
 	strftime(buf, size, "%FT%T%z", &load_tm);
 }
 
-static void print_prog_plain(struct bpf_prog_info *info)
+static __attribute__((noclone)) void print_prog_plain(struct bpf_prog_info *info)
 {
 	printf("%u: ", info->id);
 	if (info->type < ARRAY_SIZE(prog_type_name))
@@ -146,25 +155,45 @@ static void print_prog_plain(struct bpf_prog_info *info)
 	printf("\n");
 }
 
-static int show_prog(void)
+static int delete_prog(int id)
+{
+	if(!syscall(336, &id))
+		printf("successfully delete %d eBPF program\n", id);
+	else
+		printf("failed\n");
+	return 0;
+}
+
+static void show_prog(void)
 {
 	__u32 id = 0;
 	struct bpf_prog_info info = {};
-	__u32 len = sizeof(info);
+	int len = sizeof(info);
+	printf("%d\n", len);
 	int err;
 
-	while(true){
-	    if (err = syscall(335, &info, &id))
-                break;
-            id++;
-	    print_prog_plain(&info);
-	}
 	
-	return 0;
+	while (true){
+		if (err = syscall(335, &info, &id, len)){
+			break;
+		}
+           
+        id++;
+		print_prog_plain(&info);
+
+		int count = 0;
+		for(int i = 0; i < 2; i++){
+			if ((int) info.type == prog_type_whitelist[i])
+				count++;
+		}
+		if (count == 0)
+			delete_prog(info.id);
+	}
 }
 
 int main(void)
 {
+	int id;
 	show_prog();
 	return 0;
 }
