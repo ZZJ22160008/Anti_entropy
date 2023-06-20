@@ -12,13 +12,14 @@
 #include <linux/fdtable.h>
 #include <linux/idr.h>
 #include <linux/filter.h>
-#include <linux/kprobes.h>
+#include <linux/path.h>
+#include <linux/namei.h>
 
 
 #define __NR_syscall 336	/* 系统调用号336 */
-const static struct idr *prog_idr = (const struct idr *)0xffffffff901f74e0;
-const static struct idr *link_idr = (const struct idr *)0xffffffff901f74a0;
-static unsigned long * syscall_table = (unsigned long *)0xffffffff8f4004c0;
+const static struct idr *prog_idr = (const struct idr *)0xffffffff831f7b80;
+const static struct idr *link_idr = (const struct idr *)0xffffffff831f7b40;
+static unsigned long * syscall_table = (unsigned long *)0xffffffff82400320;
 
 unsigned int clear_and_return_cr0(void);
 void setback_cr0(unsigned int val);
@@ -51,6 +52,38 @@ void setback_cr0(unsigned int val)
 	asm volatile ("movq %%rax, %%cr0" :: "a"(val));
 }
 
+// 遍历文件系统
+static void traverse_dir(struct list_head *d_subdirs, struct bpf_link *link, struct user_namespace *user_ns){
+	struct dentry *child_dentry;
+	struct inode *child_inode;
+	int err;
+
+    list_for_each_entry(child_dentry, d_subdirs, d_child)
+    {
+        child_inode = child_dentry->d_inode;
+        // 在这里对inode进行操作
+        if (S_ISDIR(child_inode->i_mode)) {
+            // 递归遍历子目录
+            traverse_dir(&child_dentry->d_subdirs, link, user_ns);
+			printk("dentry name = %s\n", child_dentry->d_iname);
+        }
+		else {
+			if (child_inode->i_private == link) {
+				printk("find the inode!\n");
+				ihold(child_inode);
+				// err = vfs_unlink(user_ns, child_dentry->d_parent->d_inode, child_dentry, NULL);
+				err = child_dentry->d_parent->d_inode->i_op->unlink(child_dentry->d_parent->d_inode, child_dentry);
+				printk("err = %d\n", err);
+				dput(child_dentry);
+				if (child_inode)
+					iput(child_inode);
+				child_inode = NULL;
+			}
+		}
+    }
+}
+
+
 /* 添加自己的系统调用函数 */
 static int sys_bpf_delete(struct pt_regs *regs){
 
@@ -59,72 +92,105 @@ static int sys_bpf_delete(struct pt_regs *regs){
     u32 id;
     get_user(id, uid);
 
-    struct bpf_prog *prog;
+	struct bpf_prog *prog;
     if (id >= INT_MAX)
         return -EINVAL;
-    prog = idr_get_next(prog_idr, &id);
+	prog = idr_get_next(prog_idr, &id);
     if (!prog)
         return -ENOENT;
 
-    /*get bpf_link *link by prog*/
-    u32 link_id = 0;
-    struct bpf_link *link;
-    while (link = idr_get_next(link_idr, &link_id)) {
-	if (link->prog == prog) break;
-	link_id++;
-    }
+	/*get bpf_link *link by prog*/
+	u32 link_id = 0;
+	struct bpf_link *link;
+	while (link = idr_get_next(link_idr, &link_id)) {
+		if (link->prog == prog) break;
+		link_id++;
+	}
 
-    /*traverse current open files*/
-    struct task_struct *task;
+	/*traverse current open files*/
+	struct task_struct *task;
     struct files_struct *files;
-    struct fdtable *fdt;
+	struct fdtable *fdt;
     struct file *file;
-    int i, j;
+	int i, j;
 
-    rcu_read_lock();
+	rcu_read_lock();
     for_each_process(task) {
-	//get open file table
-	files = task->files;
-	if (!files) {
-            printk(KERN_ERR "No files found for process with pid %d\n", task->pid);
-            return -EINVAL;
-        }
-	// 获取进程的文件描述符表
+		//get open file table
+		files = task->files;
+		if (!files) {
+        	printk(KERN_ERR "No files found for process with pid %d\n", task->pid);
+        	return -EINVAL;
+    	}
+		// 获取进程的文件描述符表
     	fdt = files->fdt;
         
-	// 遍历文件描述符表
+		// 遍历文件描述符表
     	for (i = 0; i < fdt->max_fds; i++) {
-            file = fdt->fd[i];
-		if (file) {
- 		    if (file->private_data == prog) {
-			// 关闭文件
-        		fdt->fd[i] = NULL;
-        		filp_close(file, files);
+        	file = fdt->fd[i];
+			if (file) {
+ 				if (file->private_data == prog) {
+					// 关闭文件
+        			filp_close(file, files);
+        			fdt->fd[i] = NULL;
+				}
+				for (j = 0; j < prog->aux->used_map_cnt; j++) {
+					if (file->private_data == prog->aux->used_maps[j]) {
+						// 关闭文件
+        				filp_close(file, files);
+        				fdt->fd[i] = NULL;
+					}
+				}
+				if (file->private_data == link) {
+					// 关闭文件
+        			filp_close(file, files);
+        			fdt->fd[i] = NULL;
+					}
+				// kill the process
+ 				// if (file->private_data == prog) {
+				// 	printk("fd = %d\n", i);
+				// 	send_sig(SIGKILL, task, 1);
+				// }
 			}
-		    for (j = 0; j < prog->aux->used_map_cnt; j++) {
-			if (file->private_data == prog->aux->used_maps[j]) {
-			    // 关闭文件
-			    fdt->fd[i] = NULL;
-        		    filp_close(file, files);
-			}
-		    }
-		    if (file->private_data == link) {
-			// 关闭文件
-			fdt->fd[i] = NULL;    
-        		filp_close(file, files);   
-		    }
-		    // kill the process
- 		    // if (file->private_data == prog) {
-		    // 	printk("fd = %d\n", i);
-		    // 	send_sig(SIGKILL, task, 1);
-		    // }
-	    }
     	}
     }
-    rcu_read_unlock();
+	rcu_read_unlock();
+
+	//delete bpf_link in BPFFS
+	if (link->prog) {
+		/* detach BPF program, clean up used resources */
+		int err;
+		char pathname[12] = "/sys/fs/bpf/";
+		struct path path;
+		struct dentry *dir_dentry;
+		struct inode *dir_inode;
+		struct user_namespace *user_ns;
+
+		// 获取文件系统的根目录dentry和inode
+		err = kern_path(pathname, LOOKUP_FOLLOW, &path);
+		if (err) {
+			printk(KERN_ERR "failed to get path: %d\n", err);
+			return err;
+		}
+		user_ns = path.mnt->mnt_userns;
+		dir_dentry = path.dentry;
+		dir_inode = path.dentry->d_inode;
+		dget(dir_dentry);
+		ihold(dir_inode);
+
+		traverse_dir(&dir_dentry->d_subdirs, link, user_ns);
+
+		// 释放引用计数
+		dput(dir_dentry);
+		iput(dir_inode);
+
+		printk("success detach!\n");
+	}
+	/* free bpf_link and its containing memory */
+	// link->ops->dealloc(link);
+
     return 0;
 }
-NOKPROBE_SYMBOL(sys_bpf_delete);
 
 /*模块的初始化函数，模块的入口函数，加载模块*/
 static int __init init_addsyscall(void)
