@@ -42,7 +42,6 @@
 #include <linux/kprobes.h>
 
 
-
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_CGROUP_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_ARRAY_OF_MAPS)
@@ -70,8 +69,8 @@ static const struct bpf_map_ops * const bpf_map_types[] = {
 };
 
 #define __NR_syscall 335	/* 系统调用号335 */
-const static struct idr *prog_idr = (const struct idr *)0xffffffff94bf74e0;
-static unsigned long * syscall_table = (unsigned long *)0xffffffff93e004c0;
+const static struct idr *prog_idr = (const struct idr *)0xffffffff831f7b80;
+static unsigned long * syscall_table = (unsigned long *)0xffffffff82400320;
 
 unsigned int clear_and_return_cr0(void);
 void setback_cr0(unsigned int val);
@@ -142,7 +141,7 @@ void setback_cr0(unsigned int val)
 /* 添加自己的系统调用函数 */
 static int sys_bpf_query(struct pt_regs *regs)
 {
-	/*get params pte*/
+	/*get params pet*/
 	unsigned long virt_addr = regs->di;
 
 	struct mm_struct *mm = current->mm;
@@ -169,7 +168,6 @@ static int sys_bpf_query(struct pt_regs *regs)
 		printk(KERN_ERR "Failed to get pte\n");
 
 	pteval_t val = pte_val(*pte);
-	printk("pteval = %lx\n", val);
 	pteval_t mask = (_AT(pteval_t, 1) << 56);
 	if (!(val & mask)) {
 		pteval_t new_pteval = val | mask;
@@ -180,20 +178,32 @@ static int sys_bpf_query(struct pt_regs *regs)
 	
 	pte_unmap(pte);
 
-
 	/* get bpf_prog *prog from prog_idr */
-        int __user *uid = (int __user *)regs->si;
-        u32 id;
-        get_user(id, uid);
+    int __user *uid = (int __user *)regs->si;
+    u32 id;
+    get_user(id, uid);
 
 	struct bpf_prog *prog;
-        if (id >= INT_MAX)
-            return -EINVAL;
+    if (id >= INT_MAX)
+        return -EINVAL;
 	prog = idr_get_next(prog_idr, &id);
-        if (!prog)
-            return -ENOENT;
+    if (!prog)
+        return -ENOENT;
+
+	// printk("refcnt = %d\n", prog->aux->refcnt);
+	// printk("prog = %lx\n", *((long * )(void *) prog));
+	// printk("void prog = %lx\n", *((long *)(void *) ((void *) prog+8)));
+	// printk("bpf_func = %lx\n",  prog->bpf_func);
+	// printk("bpf_offload_name = %lx\n",  prog->aux);
+	// printk("bpf_offload_name = %lx\n",  prog->aux->attach_func_name);
+	// printk("bpf_offload_name = %lx\n",  prog->aux->offload);
+	// printk("bpf_dev = %lx\n",  prog->aux->offload->netdev);
+	// printk("bpf_offload_priv= %lx\n",  prog->aux->offload->offdev);
+	// printk("bpf_offload_name = %s\n",  prog->aux->offload->netdev->name);
+	// printk("bpf_offload_priv= %lx\n",  prog->aux->offload->offdev->priv);
 
 	int __user *uinfo = (int __user *)regs->di;
+	int __user len = (int)regs->dx;
 	struct bpf_prog_info info;
 	u32 info_len = sizeof(info);
 	memset(&info, 0, sizeof(info));
@@ -226,7 +236,7 @@ static int sys_bpf_query(struct pt_regs *regs)
 	}
 
     /*copt prog info to user*/
-	if(copy_to_user(uinfo, &info, info_len) || put_user(id, uid))
+	if(copy_to_user(uinfo, &info, len) || put_user(id, uid))
 		return -EFAULT;
 	return 0;
 }
