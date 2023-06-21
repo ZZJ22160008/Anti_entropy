@@ -57,7 +57,7 @@ const char * const prog_type_name[] = {
 	[BPF_PROG_TYPE_SK_LOOKUP]		= "sk_lookup",
 };
 
-
+/*需要修改！！！*/
 /*define whitelist*/
 static int prog_type_whitelist[] = {8, 15};
 static int prog_id_whitelist[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 26, 27, 33, 34};
