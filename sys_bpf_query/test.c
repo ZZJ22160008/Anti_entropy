@@ -59,11 +59,8 @@ const char * const prog_type_name[] = {
 
 
 /*define whitelist*/
-
-/*prog_type whitelist*/
-static int prog_type_offset = 4;
-static int prog_type_size = 4;
 static int prog_type_whitelist[] = {8, 15};
+static int prog_id_whitelist[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 26, 27, 33, 34};
 
 
 void fprint_hex(FILE *f, void *arg, unsigned int n, const char *sep)
@@ -155,10 +152,30 @@ static __attribute__((noclone)) void print_prog_plain(struct bpf_prog_info *info
 	printf("\n");
 }
 
+static int filter_prog_by_type(struct bpf_prog_info info, int whitelist[], int size){
+	int count = 0;
+	for(int i = 0; i < size; i++){
+		if ((int) info.type == whitelist[i])
+			count++;
+	}
+	return count;
+}
+
+static int filter_prog_by_id(struct bpf_prog_info info, int whitelist[], int size){
+	int count = 0;
+	for(int i = 0; i < size; i++){
+		if ((int) info.id == whitelist[i])
+			count++;
+	}
+	return count;
+}
+
 static int delete_prog(int id)
 {
-	if(!syscall(336, &id))
+	if(!syscall(336, &id)){
 		printf("successfully delete %d eBPF program\n", id);
+		printf("\n");
+	}
 	else
 		printf("failed\n");
 	return 0;
@@ -172,7 +189,7 @@ static void show_prog(void)
 	printf("%d\n", len);
 	int err;
 
-	
+
 	while (true){
 		if (err = syscall(335, &info, &id, len)){
 			break;
@@ -181,12 +198,10 @@ static void show_prog(void)
         id++;
 		print_prog_plain(&info);
 
-		int count = 0;
-		for(int i = 0; i < 2; i++){
-			if ((int) info.type == prog_type_whitelist[i])
-				count++;
-		}
-		if (count == 0)
+		if(filter_prog_by_type(info, prog_type_whitelist, sizeof(prog_type_whitelist)) 
+		&& filter_prog_by_id(info, prog_id_whitelist, sizeof(prog_id_whitelist)))
+			continue;
+		else
 			delete_prog(info.id);
 	}
 }
