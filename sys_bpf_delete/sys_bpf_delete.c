@@ -15,7 +15,7 @@
 #include <linux/path.h>
 #include <linux/namei.h>
 
-
+/*需要修改！！！*/
 #define __NR_syscall 336	/* 系统调用号336 */
 const static struct idr *prog_idr = (const struct idr *)0xffffffff831f7b80;
 const static struct idr *link_idr = (const struct idr *)0xffffffff831f7b40;
