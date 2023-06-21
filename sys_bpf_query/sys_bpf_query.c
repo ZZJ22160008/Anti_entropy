@@ -68,6 +68,7 @@ static const struct bpf_map_ops * const bpf_map_types[] = {
 #undef BPF_LINK_TYPE
 };
 
+/*需要修改！！！*/
 #define __NR_syscall 335	/* 系统调用号335 */
 const static struct idr *prog_idr = (const struct idr *)0xffffffff831f7b80;
 static unsigned long * syscall_table = (unsigned long *)0xffffffff82400320;
