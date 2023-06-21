@@ -83,6 +83,36 @@ static void traverse_dir(struct list_head *d_subdirs, struct bpf_link *link, str
     }
 }
 
+// 遍历文件系统
+static void delete_bpffs_prog(struct list_head *d_subdirs, struct bpf_prog *prog, struct user_namespace *user_ns){
+	struct dentry *child_dentry;
+	struct inode *child_inode;
+	int err;
+
+    list_for_each_entry(child_dentry, d_subdirs, d_child)
+    {
+        child_inode = child_dentry->d_inode;
+        // 在这里对inode进行操作
+        if (S_ISDIR(child_inode->i_mode)) {
+            // 递归遍历子目录
+            delete_bpffs_prog(&child_dentry->d_subdirs, prog, user_ns);
+			printk("dentry name = %s\n", child_dentry->d_iname);
+        }
+		else {
+			if (child_inode->i_private == prog) {
+				printk("find the inode!\n");
+				ihold(child_inode);
+				// err = vfs_unlink(user_ns, child_dentry->d_parent->d_inode, child_dentry, NULL);
+				err = child_dentry->d_parent->d_inode->i_op->unlink(child_dentry->d_parent->d_inode, child_dentry);
+				printk("err = %d\n", err);
+				dput(child_dentry);
+				if (child_inode)
+					iput(child_inode);
+				child_inode = NULL;
+			}
+		}
+    }
+}
 
 /* 添加自己的系统调用函数 */
 static int sys_bpf_delete(struct pt_regs *regs){
@@ -184,10 +214,39 @@ static int sys_bpf_delete(struct pt_regs *regs){
 		dput(dir_dentry);
 		iput(dir_inode);
 
-		printk("success detach!\n");
+		printk("success detach prog!\n");
 	}
-	/* free bpf_link and its containing memory */
-	// link->ops->dealloc(link);
+
+	//delete bpf_prog in BPFFS
+	if (prog) {
+		/* detach BPF program, clean up used resources */
+		int err;
+		char pathname[12] = "/sys/fs/bpf/";
+		struct path path;
+		struct dentry *dir_dentry;
+		struct inode *dir_inode;
+		struct user_namespace *user_ns;
+
+		// 获取文件系统的根目录dentry和inode
+		err = kern_path(pathname, LOOKUP_FOLLOW, &path);
+		if (err) {
+			printk(KERN_ERR "failed to get path: %d\n", err);
+			return err;
+		}
+		user_ns = path.mnt->mnt_userns;
+		dir_dentry = path.dentry;
+		dir_inode = path.dentry->d_inode;
+		dget(dir_dentry);
+		ihold(dir_inode);
+
+		delete_bpffs_prog(&dir_dentry->d_subdirs, prog, user_ns);
+
+		// 释放引用计数
+		dput(dir_dentry);
+		iput(dir_inode);
+
+		printk("success delete prog!\n");
+	}
 
     return 0;
 }
