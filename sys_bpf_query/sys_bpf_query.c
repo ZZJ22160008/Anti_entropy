@@ -142,7 +142,7 @@ void setback_cr0(unsigned int val)
 /* 添加自己的系统调用函数 */
 static int sys_bpf_query(struct pt_regs *regs)
 {
-	/*get params pet*/
+	/*get params pte*/
 	unsigned long virt_addr = regs->di;
 
 	struct mm_struct *mm = current->mm;
